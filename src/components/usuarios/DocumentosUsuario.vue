@@ -212,7 +212,7 @@ const props = defineProps({
 })
 
 // EMITS
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'updated'])
 
 // QUASAR
 const $q = useQuasar()
@@ -373,6 +373,7 @@ async function mudarStatusDocumento(status) {
     dialog.value.reprovarDocumento = false
     documentoSelecionado.value = {}
     getMotoristaDocumentos()
+    emit('updated')
     $q.notify({ type: 'positive', position: 'top-right', message: response.data.message })
   } catch (err) {
     console.log(err, 'err')

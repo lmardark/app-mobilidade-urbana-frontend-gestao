@@ -3,7 +3,7 @@
     <CriarMotorista @created="onRequest" v-model="dialog.cadastrar" />
     <EditarUsuario @updated="onRequest" v-model="dialog.editar" :usuarioId="usuarioId" />
     <MostrarUsuario v-model="dialog.visualizar" />
-    <DocumentosUsuario :usuario="usuario" v-model="dialog.documentos" />
+    <DocumentosUsuario :usuario="usuario" v-model="dialog.documentos" @updated="onRequest" />
     <MotoristaVeiculos :usuario="usuario" v-model="dialog.veiculos" />
     <ExcluirUsuario
       :acao="openPress"
@@ -85,8 +85,8 @@
                   <q-avatar v-else color="primary" text-color="white">
                     {{ props.row.user.name.substr(0, 1) }}
                   </q-avatar>
-                  <q-badge class="q-mt-sm" :color="badgeColor(props.row.user.status)">
-                    {{ props.row.user.status }}
+                  <q-badge class="q-mt-sm" :color="badgeColor(props.row.status)">
+                    {{ props.row.status }}
                   </q-badge>
                 </q-item-section>
 
@@ -199,6 +199,8 @@ const columns = [
 
 const badgeColor = (status) => {
   if (status === 'aprovado') return 'green'
+  if (status === 'em_analise' || status === 'pendente') return 'orange'
+  if (status === 'reprovado') return 'red'
   if (status === 'suspenso') return 'orange'
   if (status === 'banido') return 'red'
 }
