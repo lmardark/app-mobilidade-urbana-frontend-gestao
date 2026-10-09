@@ -42,13 +42,57 @@
           <q-input dense outlined v-model="veiculo.renavam" label="Renavam *" />
         </div>
         <div class="col-md-6 col-12 q-px-md q-py-sm">
-          <q-input dense outlined v-model="veiculo.categoria" label="Categoria *" />
+          <q-select
+            dense
+            outlined
+            v-model="veiculo.categoria"
+            :options="OPCOES_CATEGORIA"
+            emit-value
+            map-options
+            label="Tipo de veículo *"
+          />
         </div>
         <div class="col-md-6 col-12 q-px-md q-py-sm">
           <q-input dense outlined v-model="veiculo.uf" label="UF *" />
         </div>
         <div class="col-md-6 col-12 q-px-md q-py-sm">
           <q-input dense outlined v-model="veiculo.status" label="Status *" />
+        </div>
+
+        <div class="col-12 q-px-md q-py-sm">
+          <div class="text-subtitle2">Categorias especiais</div>
+          <div
+            v-for="item in CATEGORIAS_ESPECIAIS"
+            :key="item.campo"
+            class="row items-center q-gutter-x-sm"
+          >
+            <q-toggle
+              :model-value="veiculo[item.campo]"
+              :disable="item.campo === 'eletrico' && veiculo.categoria === 'moto'"
+              :label="item.rotulo"
+              @update:model-value="(valor) => decidir(item.campo, valor)"
+            />
+            <template v-if="veiculo[item.pedido] && !decisao[item.campo]">
+              <q-badge color="orange" label="Pedido do motorista" />
+              <q-btn
+                dense
+                flat
+                color="positive"
+                label="Aprovar"
+                @click="decidir(item.campo, true)"
+              />
+              <q-btn
+                dense
+                flat
+                color="negative"
+                label="Recusar"
+                @click="decidir(item.campo, false)"
+              />
+            </template>
+            <span v-else-if="decisao[item.campo]" class="text-caption text-grey-7">
+              {{ veiculo[item.campo] ? 'Aprovado' : 'Sem a categoria' }} ao salvar
+            </span>
+          </div>
         </div>
       </div>
 
@@ -93,6 +137,16 @@ const model = computed({
   set: (val) => emit('update:modelValue', val),
 })
 
+const OPCOES_CATEGORIA = [
+  { label: 'Carro', value: 'carro' },
+  { label: 'Moto', value: 'moto' },
+]
+
+const CATEGORIAS_ESPECIAIS = [
+  { campo: 'eletrico', pedido: 'eletrico_solicitado', rotulo: 'Elétrico (só carro)' },
+  { campo: 'taxi', pedido: 'taxi_solicitado', rotulo: 'Táxi' },
+]
+
 // STATE
 const veiculo = reactive({
   marca: '',
@@ -102,10 +156,23 @@ const veiculo = reactive({
   cor: '',
   placa: '',
   renavam: '',
-  categoria: '',
+  categoria: 'carro',
+  eletrico: false,
+  taxi: false,
+  eletrico_solicitado: false,
+  taxi_solicitado: false,
   status: '',
   uf: '',
 })
+
+// elétrico e táxi só vão no salvar quando a gestão decide: mandar sempre
+// encerraria o pedido do motorista ao corrigir, por exemplo, a placa
+const decisao = reactive({ eletrico: false, taxi: false })
+
+function decidir(campo, valor) {
+  veiculo[campo] = valor
+  decisao[campo] = true
+}
 
 const loadingDialog = ref(false)
 const loadingUpdate = ref(false)
@@ -118,6 +185,7 @@ async function getVeiculo(id) {
 
 async function onBeforeShow() {
   if (!props.veiculoId) return
+  Object.assign(decisao, { eletrico: false, taxi: false })
 
   try {
     const data = await getVeiculo(props.veiculoId)
@@ -140,6 +208,10 @@ async function atualizarVeiculo() {
       placa: veiculo.placa,
       renavam: veiculo.renavam,
       categoria: veiculo.categoria,
+      ...(decisao.eletrico
+        ? { eletrico: veiculo.categoria === 'carro' && veiculo.eletrico }
+        : {}),
+      ...(decisao.taxi ? { taxi: veiculo.taxi } : {}),
       status: veiculo.status,
       uf: veiculo.uf,
     })
@@ -149,7 +221,7 @@ async function atualizarVeiculo() {
   } catch (err) {
     loadingUpdate.value = false
 
-    $q.notify({ type: 'negative', message: err.message })
+    $q.notify({ type: 'negative', message: err.response?.data?.message ?? err.message })
   }
 }
 </script>

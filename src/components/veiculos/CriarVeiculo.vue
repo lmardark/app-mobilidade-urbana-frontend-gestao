@@ -45,7 +45,15 @@
           </div>
 
           <div class="col-md-6 col-12 q-px-md q-py-sm">
-            <q-input dense outlined v-model="veiculo.categoria" label="Categoria *" />
+            <q-select
+              dense
+              outlined
+              v-model="veiculo.categoria"
+              :options="OPCOES_CATEGORIA"
+              emit-value
+              map-options
+              label="Tipo de veículo *"
+            />
           </div>
 
           <div class="col-md-6 col-12 q-px-md q-py-sm">
@@ -54,6 +62,19 @@
 
           <div class="col-md-6 col-12 q-px-md q-py-sm">
             <q-input dense outlined v-model="veiculo.status" label="Status *" />
+          </div>
+
+          <div class="col-12 q-px-md q-py-sm">
+            <div class="text-subtitle2">Categorias especiais</div>
+            <div class="text-caption text-grey-7">
+              Criado pela gestão, o veículo já sai aprovado nas categorias marcadas.
+            </div>
+            <q-toggle
+              v-model="veiculo.eletrico"
+              :disable="veiculo.categoria === 'moto'"
+              label="Elétrico (só carro)"
+            />
+            <q-toggle v-model="veiculo.taxi" label="Táxi" />
           </div>
         </div>
 
@@ -104,6 +125,11 @@ const model = computed({
   set: (val) => emit('update:modelValue', val),
 })
 
+const OPCOES_CATEGORIA = [
+  { label: 'Carro', value: 'carro' },
+  { label: 'Moto', value: 'moto' },
+]
+
 // STATE
 const veiculo = reactive({
   marca: '',
@@ -113,7 +139,9 @@ const veiculo = reactive({
   cor: '',
   placa: '',
   renavam: '',
-  categoria: '',
+  categoria: 'carro',
+  eletrico: false,
+  taxi: false,
   status: '',
   uf: '',
 })
@@ -133,7 +161,9 @@ function preecherDados() {
     cor: 'preto',
     placa: 'GCH9110',
     renavam: '99231234567',
-    categoria: 'negocia',
+    categoria: 'carro',
+    eletrico: false,
+    taxi: false,
     status: 'ativo',
     uf: 'RO',
   })
@@ -152,7 +182,9 @@ function limparForm() {
     cor: '',
     placa: '',
     renavam: '',
-    categoria: '',
+    categoria: 'carro',
+    eletrico: false,
+    taxi: false,
     status: '',
     uf: '',
   })
@@ -171,6 +203,9 @@ async function create() {
       placa: veiculo.placa,
       renavam: veiculo.renavam,
       categoria: veiculo.categoria,
+      // não existe moto elétrica
+      eletrico: veiculo.categoria === 'carro' && veiculo.eletrico,
+      taxi: veiculo.taxi,
       status: veiculo.status,
       uf: veiculo.uf,
     })
@@ -181,7 +216,7 @@ async function create() {
     console.log(err, 'err')
     model.value = false
     loading.value = false
-    $q.notify({ type: 'negative', message: err.message })
+    $q.notify({ type: 'negative', message: err.response?.data?.message ?? err.message })
   } finally {
     loading.value = false
     model.value = false
