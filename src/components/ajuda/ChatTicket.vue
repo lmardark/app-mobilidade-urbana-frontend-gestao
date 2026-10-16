@@ -42,12 +42,11 @@
           }}</span>
           <div class="row q-gutter-sm">
             <q-btn
-              v-if="podeAssumir && !finalizado"
+              v-if="podeIniciar"
               outline
               dense
               color="primary"
               label="Iniciar o atendimento"
-              :disable="aguardando && podeAtender && !ticket.fila?.pode_iniciar"
               :loading="operando"
               @click="acao('assumir')"
             />
@@ -62,26 +61,16 @@
               @click="transferenciaAberta = true"
             />
             <q-btn
+              v-if="podeResponder"
               outline
               dense
-              color="primary"
-              label="Alterar status"
-              icon-right="expand_more"
-              :disable="(!podeAtender && !global) || operando"
-            >
-              <q-menu
-                ><q-list style="min-width: 200px"
-                  ><q-item
-                    v-for="item in destinos"
-                    :key="item.value"
-                    clickable
-                    v-close-popup
-                    @click="acao('status', item.value)"
-                    ><q-item-section>{{ item.label }}</q-item-section></q-item
-                  ></q-list
-                ></q-menu
-              >
-            </q-btn>
+              color="positive"
+              icon="task_alt"
+              label="Finalizar o atendimento"
+              :loading="operando"
+              :disable="enviando"
+              @click="acao('status', 'resolved')"
+            />
           </div>
         </div>
       </q-card-section>
@@ -181,93 +170,100 @@
       </q-card-section>
       <q-separator v-if="aba === 'mensagens'" />
       <q-card-section v-if="aba === 'mensagens'" class="q-pa-sm">
-        <q-banner v-if="erro" dense rounded class="bg-red-1 text-negative q-mb-sm" role="alert">{{
-          erro
-        }}</q-banner>
-        <div v-if="!podeAtender" class="text-caption text-grey-7 q-mb-sm">
-          Outro operador está atendendo este ticket.
-        </div>
-        <div v-else-if="finalizado" class="text-caption text-grey-7 q-mb-sm">
-          Reabra o ticket para continuar a conversa.
-        </div>
-        <div v-else-if="aguardando" class="text-caption text-grey-7 q-mb-sm">
-          Inicie o atendimento quando estiver disponível para responder este chamado.
-        </div>
-        <div v-if="imagens.length" class="row q-gutter-sm q-mb-sm imagens-selecionadas">
-          <div
-            v-for="(imagem, indice) in imagens"
-            :key="imagem.url"
-            class="previa-imagem relative-position"
-          >
-            <q-img
-              :src="imagem.url"
-              :alt="imagem.arquivo.name"
-              fit="cover"
-              class="rounded-borders"
-              style="width: 80px; height: 64px"
+        <q-banner
+          v-if="erro && erro !== avisoAtendimento"
+          dense
+          rounded
+          class="bg-red-1 text-negative q-mb-sm"
+          role="alert"
+          >{{ erro }}</q-banner
+        >
+        <q-banner
+          v-if="!podeResponder"
+          dense
+          rounded
+          class="bg-grey-2 text-grey-8"
+          role="status"
+          aria-label="Situação do atendimento"
+        >
+          <template #avatar><q-icon name="info_outline" color="grey-6" /></template>
+          {{ avisoAtendimento }}
+        </q-banner>
+        <template v-else>
+          <div v-if="imagens.length" class="row q-gutter-sm q-mb-sm imagens-selecionadas">
+            <div
+              v-for="(imagem, indice) in imagens"
+              :key="imagem.url"
+              class="previa-imagem relative-position"
+            >
+              <q-img
+                :src="imagem.url"
+                :alt="imagem.arquivo.name"
+                fit="cover"
+                class="rounded-borders"
+                style="width: 80px; height: 64px"
+              />
+              <q-btn
+                round
+                dense
+                size="xs"
+                color="negative"
+                icon="close"
+                class="absolute-top-right"
+                :aria-label="`Remover imagem ${imagem.arquivo.name}`"
+                :disable="enviando"
+                @click="removerImagem(indice)"
+              />
+              <q-tooltip>{{ imagem.arquivo.name }}</q-tooltip>
+            </div>
+          </div>
+          <q-form class="row items-end no-wrap q-gutter-sm" @submit="enviar">
+            <input
+              ref="seletorImagens"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              class="hidden"
+              @change="selecionarImagens"
             />
             <q-btn
+              flat
               round
+              color="primary"
+              icon="add_photo_alternate"
+              aria-label="Adicionar imagens"
+              :disable="enviando || operando || imagens.length >= 3"
+              @click="seletorImagens?.click()"
+            >
+              <q-tooltip>Adicionar imagens ou colar um print com Ctrl + V</q-tooltip>
+            </q-btn>
+            <q-input
+              v-model="texto"
+              class="col"
+              outlined
+              autogrow
               dense
-              size="xs"
-              color="negative"
-              icon="close"
-              class="absolute-top-right"
-              :aria-label="`Remover imagem ${imagem.arquivo.name}`"
-              :disable="enviando"
-              @click="removerImagem(indice)"
+              label="Escreva sua mensagem"
+              :maxlength="4000"
+              :disable="enviando || operando"
+              @keydown.enter="teclaMensagem"
+              @paste="colarImagem"
             />
-            <q-tooltip>{{ imagem.arquivo.name }}</q-tooltip>
-          </div>
-        </div>
-        <q-form class="row items-end no-wrap q-gutter-sm" @submit="enviar">
-          <input
-            ref="seletorImagens"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            class="hidden"
-            @change="selecionarImagens"
-          />
-          <q-btn
-            flat
-            round
-            color="primary"
-            icon="add_photo_alternate"
-            aria-label="Adicionar imagens"
-            :disable="!podeAtender || finalizado || aguardando || enviando || imagens.length >= 3"
-            @click="seletorImagens?.click()"
-          >
-            <q-tooltip>Adicionar imagens ou colar um print com Ctrl + V</q-tooltip>
-          </q-btn>
-          <q-input
-            v-model="texto"
-            class="col"
-            outlined
-            autogrow
-            dense
-            label="Escreva sua mensagem"
-            :maxlength="4000"
-            :disable="!podeAtender || finalizado || aguardando || enviando"
-            @keydown.enter="teclaMensagem"
-            @paste="colarImagem"
-          />
-          <q-btn
-            color="primary"
-            round
-            icon="send"
-            type="submit"
-            aria-label="Enviar mensagem"
-            :loading="enviando"
-            :disable="
-              !podeAtender || finalizado || aguardando || (!texto.trim() && !imagens.length)
-            "
-          />
-        </q-form>
+            <q-btn
+              color="primary"
+              round
+              icon="send"
+              type="submit"
+              aria-label="Enviar mensagem"
+              :loading="enviando"
+              :disable="operando || (!texto.trim() && !imagens.length)"
+            />
+          </q-form>
+        </template>
         <div class="row justify-between text-caption text-grey-6 q-mt-xs">
-          <span :class="{ invisible: $q.screen.lt.sm }"
+          <span v-if="podeResponder" :class="{ invisible: $q.screen.lt.sm }"
             >Enter para enviar · Shift + Enter para quebrar a linha</span
-          ><span>{{
+          ><span class="q-ml-auto">{{
             conectadoChat && autenticadoCanal ? 'Em tempo real' : 'Atualização periódica'
           }}</span>
         </div>
@@ -293,13 +289,7 @@ import { computed, ref, toRef, watch, nextTick } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
 import { useChatTicket } from 'src/composables/useChatTicket'
 import { conectadoChat } from 'src/services/echo'
-import {
-  statusTickets,
-  statusTicket,
-  motivoTicket,
-  horarioTicket,
-  gestaoGlobalTickets,
-} from 'src/utils/tickets'
+import { statusTicket, motivoTicket, horarioTicket, gestaoGlobalTickets } from 'src/utils/tickets'
 import TransferirTicket from 'src/components/ajuda/TransferirTicket.vue'
 import HistoricoTransferencias from 'src/components/ajuda/HistoricoTransferencias.vue'
 import ImagemMensagem from 'src/components/ajuda/ImagemMensagem.vue'
@@ -329,6 +319,7 @@ const {
   adicionarImagens,
   removerImagem,
   operando,
+  podeResponder,
   autenticadoCanal,
   abrir,
   antigas,
@@ -356,7 +347,7 @@ function selecionarImagens(evento) {
   evento.target.value = ''
 }
 function colarImagem(evento) {
-  if (!podeAtender.value || finalizado.value || aguardando.value || enviando.value) return
+  if (!podeResponder.value || operando.value || enviando.value) return
   const arquivos = Array.from(evento.clipboardData?.files || []).filter((arquivo) =>
     arquivo.type.startsWith('image/'),
   )
@@ -366,17 +357,22 @@ function colarImagem(evento) {
 }
 const transferenciaAberta = ref(false)
 const global = computed(() => gestaoGlobalTickets(auth.user))
-const finalizado = computed(() => ['resolved', 'closed'].includes(ticket.value?.status))
-const aguardando = computed(() => ticket.value?.status === 'waiting')
-const podeAtender = computed(
-  () => !ticket.value?.gestor_responsavel || ticket.value.gestor_responsavel.id === auth.user?.id,
-)
-const podeAssumir = computed(
+const finalizado = computed(() => statusTicket(ticket.value?.status).value === 'resolved')
+const podeIniciar = computed(
   () =>
-    !ticket.value?.gestor_responsavel ||
-    (aguardando.value && ticket.value.gestor_responsavel.id === auth.user?.id) ||
-    (global.value && ticket.value.gestor_responsavel.id !== auth.user?.id),
+    !finalizado.value &&
+    (!ticket.value?.gestor_responsavel ||
+      (ticket.value.status !== 'in_progress' &&
+        ticket.value.gestor_responsavel.id === auth.user?.id) ||
+      (global.value && ticket.value.gestor_responsavel.id !== auth.user?.id)),
 )
+const avisoAtendimento = computed(() => {
+  if (finalizado.value)
+    return 'Atendimento finalizado. O histórico continua disponível para consulta.'
+  if (ticket.value?.gestor_responsavel && ticket.value.gestor_responsavel.id !== auth.user?.id)
+    return `Este atendimento está com ${ticket.value.gestor_responsavel.name}. Você pode consultar o histórico.`
+  return 'Inicie o atendimento antes de responder este ticket.'
+})
 watch(
   () => props.ticketId,
   () => {
@@ -390,7 +386,7 @@ watch(global, (value) => {
 watch(
   () => ticket.value?.status,
   (status) => {
-    if (['resolved', 'closed'].includes(status)) emit('finalizado', ticket.value)
+    if (statusTicket(status).value === 'resolved') emit('finalizado', ticket.value)
   },
 )
 async function confirmarTransferencia(registro) {
@@ -398,16 +394,6 @@ async function confirmarTransferencia(registro) {
   revisaoTransferencias.value++
   await sincronizar()
 }
-const destinos = computed(() =>
-  statusTickets.filter(
-    (item) =>
-      item.value !== ticket.value?.status &&
-      item.value !== 'waiting' &&
-      (!aguardando.value || ['open', 'in_progress'].includes(item.value)) &&
-      (item.value !== 'closed' || ticket.value?.status === 'resolved') &&
-      (ticket.value?.status !== 'closed' || ['open', 'in_progress'].includes(item.value)),
-  ),
-)
 watch(
   () => mensagens.value.at(-1)?.id,
   async () => {

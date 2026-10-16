@@ -23,10 +23,13 @@ Migrations complementares do módulo, em ordem:
 - `2026_10_15_180000_create_ticket_leituras_table.php`: leitura individual por operador.
 - `2026_10_15_190000_create_chamado_mensagem_anexos_table.php`: imagens no atendimento.
 - `2026_10_15_200000_create_corrida_mensagens_table.php`: conversa motorista/passageiro.
+- `2026_10_16_120000_simplifica_status_dos_tickets.php`: converte tickets antigos em `pending` para `waiting` quando têm responsável ou `open` quando não têm; converte `closed` para `resolved`, preservando o histórico.
 
 Os detalhes financeiros e o mapa usam as tabelas existentes `corridas`, `corrida_financeiros`, `corrida_destinos`, `produtos_corridas` e `veiculos`; essa parte não acrescenta migration.
 
-As situações são definidas no enum PHP `StatusTicket` e validadas na API: `open` (aberto), `waiting` (aguardando atendimento), `in_progress` (em atendimento), `pending` (aguardando resposta), `resolved` (resolvido) e `closed` (fechado). A coluna é string para permitir evolução sem alterações de um enum nativo do MySQL.
+As situações são definidas no enum PHP `StatusTicket` e validadas na API: `open` (Aberto), `waiting` (Aguardando atendimento), `in_progress` (Em atendimento) e `resolved` (Finalizado). A coluna é string para permitir evolução sem alterações de um enum nativo do MySQL. “Aguardando resposta” e “Fechado” foram removidos do fluxo e do filtro; `resolved` mantém seu valor na API, com o novo nome “Finalizado” na interface e nas novas mensagens de sistema.
+
+Ao atualizar o backend, execute `php artisan migrate` para converter os registros antigos. A migração preserva mensagens e auditoria existentes, sem reescrever os textos das mensagens antigas. Requisições com `pending` ou `closed` passam a retornar 422.
 
 O solicitante é Passageiro ou Motorista. A mesma conta pode ter os dois perfis, mas cada ticket registra qual perfil originou o atendimento. Uma corrida só pode ser vinculada quando pertence ao perfil indicado. O chat de atendimento pertence ao solicitante do ticket. A conversa entre motorista e passageiro pertence à corrida e tem acesso próprio, descrito adiante.
 
@@ -34,14 +37,27 @@ O Sistema registra mudanças de status e responsável. Não é uma conta que pre
 
 ## Regras do atendimento
 
+As contas de desenvolvimento do painel usam a senha `password`:
+
+| Perfil          | E-mail                        |
+| --------------- | ----------------------------- |
+| Admin           | `admin@example.com`           |
+| Gestão          | `gestao@example.com`          |
+| Atendimento     | `atendimento@example.com`     |
+| Suporte técnico | `suporte.tecnico@example.com` |
+
+Para atualizar somente os e-mails antigos das contas de demonstração, execute no backend `php artisan db:seed --class=GestoresSeeder`. O seeder preserva IDs, senhas, perfis e vínculos existentes; não é necessário recriar o banco. Para contas novas, a senha inicial continua sendo `password`.
+
 - Novos tickets entram sem responsável, em `open`. Atendimento vê essa entrada e os próprios tickets; Suporte técnico vê apenas os designados para ele. Gestão/Admin têm visão global.
 - Designar ou transferir coloca o ticket em `waiting`. O botão **Iniciar o atendimento** chama a rota `/assumir`; o início é manual e usa transação com bloqueio da linha. É permitido manter mais de um ticket em atendimento por operador.
+- A interface não possui menu Alterar status. **Iniciar o atendimento** muda para `in_progress` e libera o campo de texto e as imagens somente para o responsável. **Finalizar o atendimento** envia `PATCH /api/gestao/ajuda/tickets/{ticket}/status` com `{"status":"resolved"}`; o formulário fica oculto novamente. O status exibido acompanha o retorno da API e os eventos em tempo real.
+- A finalização é definitiva: tickets em `resolved` ficam somente para consulta. A API bloqueia reabertura, transferência, reinício e novas mensagens; para continuar o assunto, o solicitante deve abrir outro ticket. Repetir o UUID e o conteúdo de uma mensagem já salva apenas devolve o registro existente.
+- Antes do início, em atendimentos de outro operador ou após a finalização, o chat mantém o histórico e mostra um aviso informativo em cinza. O aviso “Inicie o atendimento antes de responder este ticket” não é apresentado como erro. Falhas reais de requisição continuam sendo informadas separadamente.
 - Só o responsável envia respostas. Gestão/Admin podem assumir um atendimento de outro operador antes de responder ou transferi-lo; a ação fica registrada no histórico.
 - Transferências atualizam o responsável, a auditoria em `ticket_transfers` e as mensagens de sistema na mesma transação. A aba Histórico de transferências é exclusiva de Gestão/Admin.
-- Resolver um ticket retira-o da fila de Atendimento/Suporte técnico e do filtro `meus`. A listagem global de Gestão/Admin conserva o histórico. Resolver não inicia o próximo atendimento automaticamente.
+- Finalizar um ticket retira-o da fila de Atendimento/Suporte técnico e do filtro `meus`. A listagem global de Gestão/Admin conserva o histórico. Finalizar não inicia o próximo atendimento automaticamente.
 - O aviso de fila é atualizado na mesma mensagem de sistema. Ao iniciar, o texto passa para “Chegou sua vez! Seu atendimento foi iniciado.” A interface não exibe timer nem o antigo banner de espera.
-- `pending` aguarda resposta do solicitante. Sua resposta ou a retomada de um ticket resolvido devolve o atendimento à espera quando existe responsável; sem responsável, ele volta a `open`.
-- O suporte reabre tickets resolvidos antes de responder. Para fechar é necessário resolver primeiro. Tickets fechados bloqueiam mensagens até serem reabertos pelo suporte.
+- A rota `/status` permanece para integrações e para a ação Finalizar o atendimento, com `{"status":"resolved"}`. Tickets finalizados não podem voltar a um estado ativo. Não existe mais uma etapa separada de fechamento.
 - Cada tentativa de envio mantém um UUID. Repetir a mesma requisição devolve a mensagem já salva; alterar conteúdo ou autor com o mesmo UUID retorna 409.
 - O servidor determina a identidade do autor. Campos de autor enviados pelo cliente são recusados.
 
@@ -71,6 +87,8 @@ No frontend, `src/services/echo.js` usa o cliente Axios do app para autorizaçã
 `ChatTicket.vue` usa [QChatMessage do Quasar](https://quasar.dev/vue-components/chat/) com texto puro; HTML recebido em mensagens nunca é executado.
 
 ## Rotas do backend e contratos de integração
+
+O componente **Histórico da corrida** também é reutilizado em **Motoristas saldo**, com detalhes e mapa à esquerda e conversa somente para consulta à direita. Nesse contexto, consulta GET /api/gestao/motoristas-saldo/{movimentacao}/corrida/mensagens e assina o canal privado corrida.{id}.chat.financeiro, com permissão financeiro.consultar e vínculo ao lançamento. A Central de ajuda mantém suas próprias rotas e regras de acesso aos tickets. Consulte [motoristas-saldo.md](motoristas-saldo.md) para o contrato financeiro.
 
 Os caminhos abaixo já incluem `/api`. Em desenvolvimento, acrescente `http://localhost` antes da rota. Envie `Authorization: Bearer <token>` e `Accept: application/json`; nos POSTs/PATCHs com JSON, também `Content-Type: application/json`. Para anexos, use multipart com boundary definido pelo cliente HTTP.
 

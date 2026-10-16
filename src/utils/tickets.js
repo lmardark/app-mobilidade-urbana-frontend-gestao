@@ -2,9 +2,7 @@ export const statusTickets = [
   { value: 'open', label: 'Aberto', color: 'blue' },
   { value: 'in_progress', label: 'Em atendimento', color: 'primary' },
   { value: 'waiting', label: 'Aguardando atendimento', color: 'amber-9' },
-  { value: 'pending', label: 'Aguardando resposta', color: 'orange-8' },
-  { value: 'resolved', label: 'Resolvido', color: 'positive' },
-  { value: 'closed', label: 'Fechado', color: 'grey-7' },
+  { value: 'resolved', label: 'Finalizado', color: 'positive' },
 ]
 
 export const motivosTickets = [
@@ -15,8 +13,11 @@ export const motivosTickets = [
   { value: 'outro', label: 'Outro assunto' },
 ]
 
-export const statusTicket = (value) =>
-  statusTickets.find((item) => item.value === value) || statusTickets[0]
+export const statusTicket = (value) => {
+  // Compatibilidade visual durante a atualização dos registros antigos no backend.
+  const atual = { pending: 'waiting', closed: 'resolved' }[value] || value
+  return statusTickets.find((item) => item.value === atual) || statusTickets[0]
+}
 export const gestaoGlobalTickets = (user) => ['gestao', 'admin'].includes(user?.perfil_acesso)
 export const visualizaEntradaTickets = (user) =>
   gestaoGlobalTickets(user) || user?.perfil_acesso === 'atendimento'

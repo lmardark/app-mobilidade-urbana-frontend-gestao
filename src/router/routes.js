@@ -15,6 +15,11 @@ const routes = [
     meta: { requiresAuth: true },
     children: [
       {
+        path: 'motoristas-saldo',
+        component: () => import('src/pages/financeiro/PaginaMotoristasSaldo.vue'),
+        meta: { permissao: 'financeiro.consultar' },
+      },
+      {
         path: 'central-ajuda',
         component: () => import('src/pages/ajuda/PaginaCentralAjuda.vue'),
         meta: { permissao: 'ajuda.gerenciar' },

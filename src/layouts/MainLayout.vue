@@ -173,6 +173,12 @@ export default {
           },
           { icon: 'group', text: 'Motoristas', to: '/motoristas', permissao: 'usuarios.consultar' },
           {
+            icon: 'account_balance_wallet',
+            text: 'Motoristas saldo',
+            to: '/motoristas-saldo',
+            permissao: 'financeiro.consultar',
+          },
+          {
             icon: 'groups_2',
             text: 'Passageiros',
             to: '/passageiros',

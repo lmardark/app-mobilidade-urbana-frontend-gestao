@@ -23,6 +23,12 @@ export function useChatTicket(
   const texto = ref('')
   const imagens = ref([])
   const operando = ref(false)
+  const podeResponder = computed(
+    () =>
+      !!auth.user?.id &&
+      ticket.value?.status === 'in_progress' &&
+      ticket.value.gestor_responsavel?.id === auth.user.id,
+  )
   const autenticadoCanal = ref(false)
   const acessoNegado = ref(false)
   const revisaoTransferencias = ref(0)
@@ -46,7 +52,7 @@ export function useChatTicket(
   }
 
   function adicionarImagens(arquivos) {
-    if (enviando.value) return
+    if (!podeResponder.value || enviando.value || operando.value) return
     erro.value = ''
     for (const arquivo of arquivos) {
       if (imagens.value.length >= 3) {
@@ -311,7 +317,8 @@ export function useChatTicket(
     if (
       (!texto.value.trim() && !imagens.value.length) ||
       enviando.value ||
-      ticket.value?.status === 'waiting'
+      !podeResponder.value ||
+      operando.value
     )
       return
     const epoch = version
@@ -402,6 +409,7 @@ export function useChatTicket(
     adicionarImagens,
     removerImagem,
     operando,
+    podeResponder,
     autenticadoCanal,
     abrir,
     antigas,
