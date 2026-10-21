@@ -16,6 +16,7 @@ Migration: **2026_10_16_140000_create_saldo_motoristas_table.php**.
 | motorista_id                    | FK de motoristas, exclusão física em cascata                 |
 | corrida_id                      | FK opcional de corridas, fica nula se a corrida for excluída |
 | tipo                            | entrada ou saida                                             |
+| categoria                       | varchar(80), classificação da operação, opcional e indexada  |
 | valor                           | decimal(10,2), magnitude da movimentação                     |
 | descricao                       | varchar(255), título                                         |
 | metodo_pagamento                | dinheiro, pix, cartao_online, saldo_carteira ou nulo         |
@@ -43,7 +44,7 @@ O seeder manual **SaldoMotoristasDemonstracaoSeeder** cria uma conta separada ch
 php artisan db:seed --class=SaldoMotoristasDemonstracaoSeeder
 ```
 
-Entre no painel com Gestão/Admin, abra Motoristas saldo e busque “Motorista financeiro”. Clique em “Corrida Pop · Bônus de incentivo” para ver a composição, o bônus e a auditoria. Os resgates mostram o detalhe sem corrida e permitem testar o filtro Em processamento.
+Entre no painel com Gestão/Admin, abra Motoristas saldo e busque “Motorista financeiro”. Clique na movimentação de corrida identificada com “Inclui bônus” para ver a composição, o bônus e a auditoria. Os resgates mostram o detalhe sem corrida e permitem testar o filtro Em processamento.
 
 O seeder funciona somente em local/testing e pode ser repetido sem duplicar lançamentos. As observações identificam os dados como demonstração. Não chama gateways, não executa transferência bancária e não altera a carteira das contas existentes. Não faz parte do DatabaseSeeder.
 
@@ -66,7 +67,7 @@ Sem corrida vinculada, a aba Histórico da corrida fica oculta e essa rota não 
 
 O evento corrida.mensagem informa apenas os IDs. A tela consulta as novas mensagens e revalida o acesso. A assinatura permanece somente enquanto a aba está aberta. Com conexão e canal autorizados, não há consultas periódicas; a recuperação a cada 15 segundos funciona quando a conexão falha. Após atualizar o backend, reinicie os workers existentes com php artisan queue:restart para carregar o novo canal de transmissão. Esta aba não exige nova migration.
 
-O seeder de demonstração também inclui três pontos de trajeto e quatro mensagens fictícias por corrida. Pode ser repetido para completar o histórico do exemplo existente, preservando mensagens editadas e os saldos. Abra a movimentação “Corrida Pop · Bônus de incentivo” e selecione Histórico da corrida para conferir.
+O seeder de demonstração também inclui três pontos de trajeto e quatro mensagens fictícias por corrida. Pode ser repetido para completar o histórico do exemplo existente, preservando mensagens editadas e os saldos. Abra uma movimentação com corrida vinculada e selecione Histórico da corrida para conferir.
 
 ### Filtros da listagem
 
@@ -86,13 +87,13 @@ Erros: 401 sem autenticação, 403 sem permissão, 404 para lançamento inexiste
 
 ### Títulos das movimentações
 
-A lista e o detalhe usam o campo titulo da resposta. A descricao original permanece disponível na API. A identificação vem de detalhes.categoria, sem analisar palavras da descrição. Registros sem categoria reconhecida mantêm a descrição original.
+A lista e o detalhe usam o campo titulo da resposta. A descricao original permanece disponível na API. A identificação vem da coluna categoria de saldo_motoristas, com compatibilidade para detalhes.categoria nos registros ainda sem a coluna preenchida, sem analisar palavras da descrição. Registros sem categoria reconhecida mantêm a descrição original. A migration 2026_10_16_150000_add_categoria_to_saldo_motoristas.php copia as classificações existentes e preserva valores, saldos e datas. Veja [ganhos-motoristas.md](ganhos-motoristas.md) para o demonstrativo e os contratos do novo módulo Ganhos.
 
 O filtro Categoria contém somente opções selecionáveis: Todos, Valor da corrida, Recompensa, Gorjeta, Compensação, 100% dos ganhos, Transferência / Resgate, Descontos e taxas, Ajustes e estornos e Outro. Todos ou Limpar filtros remove a restrição de categoria.
 
 Recompensa inclui a categoria antiga bonus. Valor da corrida inclui ganho_corrida. Descontos e taxas reúne desconto e taxa_plataforma; Ajustes e estornos reúne ajuste e estorno. Esses agrupamentos são exclusivos da consulta: os lançamentos mantêm suas categorias e títulos específicos. A API também aceita as categorias antigas e os quatro valores individuais agrupados.
 
-| detalhes.categoria             | Título exibido                                             |
+| categoria                      | Título exibido                                             |
 | ------------------------------ | ---------------------------------------------------------- |
 | valor_corrida ou ganho_corrida | Valor da corrida · nome real do produto                    |
 | recompensa ou bonus            | Recompensa                                                 |
@@ -108,7 +109,7 @@ Recompensa inclui a categoria antiga bonus. Valor da corrida inclui ganho_corrid
 
 Valores de corrida com detalhes.financeiro.bonus_incentivo maior que zero recebem o complemento “Inclui bônus”. O total permanece como ganho da corrida: não se cria outro crédito ou se classifica todo o ganho como recompensa. Recompensa identifica um lançamento exclusivo desse incentivo. O nome do produto é consultado em produtos_corridas; não é fixado como Pop. O status permanece no selo, separado do título. A categoria ganhos_integrais apenas identifica uma operação registrada: não recalcula os valores ou isenta taxas automaticamente. Outro exige classificação explícita; categorias ausentes ou desconhecidas não são presumidas como Outro.
 
-O seeder SaldoMotoristasDemonstracaoSeeder preenche as categorias das suas seis movimentações. Ao ser repetido, completa somente categorias ausentes dos registros de demonstração, preservando descrições, valores, saldos e categorias já informadas. Não exige nova migration.
+O seeder SaldoMotoristasDemonstracaoSeeder preenche as categorias das suas seis movimentações. Ao ser repetido, completa somente categorias ausentes dos registros de demonstração, preservando descrições, valores, saldos e categorias já informadas. A migration da coluna categoria deve estar aplicada; não é necessário recriar o banco ou repetir o seeder para classificar registros antigos.
 
 ### Saldos e composição
 
